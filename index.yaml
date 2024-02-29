@@ -1,0 +1,14 @@
+apiVersion: v1
+entries:
+  eero-metrics:
+  - apiVersion: v2
+    appVersion: 0.0.2
+    created: "2024-02-29T19:54:09.553298243Z"
+    description: A Helm chart for Kubernetes
+    digest: cd86e0888a9910d59606d8c7d184ffc665f3a73958a04f7157ea950fa87d034e
+    name: eero-metrics
+    type: application
+    urls:
+    - https://github.com/ImDevinC/eero-metrics/releases/download/eero-metrics-0.0.2/eero-metrics-0.0.2.tgz
+    version: 0.0.2
+generated: "2024-02-29T19:54:09.553371239Z"
