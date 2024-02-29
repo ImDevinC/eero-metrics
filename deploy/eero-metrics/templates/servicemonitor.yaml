@@ -1,0 +1,22 @@
+{{- if .Values.serviceMonitor.enabled -}}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "eero-metrics.fullname" . }}
+  labels:
+    {{- include "eero-metrics.labels" . | nindent 4 }}
+  {{- with .Values.serviceMonitor.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  endpoints:
+  - port: http
+    path: /metrics
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  selector:
+    matchLabels:
+      {{- include "eero-metrics.selectorLabels" . | nindent 6 }}
+{{- end }}
