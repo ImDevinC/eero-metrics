@@ -1,0 +1,6 @@
+deploy/
+.github/
+grafana/
+prometheus/
+dashboard.json
+docker-compose.yml
