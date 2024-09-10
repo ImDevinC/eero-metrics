@@ -15,22 +15,36 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-func getMetrics(logger *slog.Logger) {
+type metrics struct {
+	uploadedBytes   *prometheus.GaugeVec
+	downloadedBytes *prometheus.GaugeVec
+}
+
+func registerMetrics(reg prometheus.Registerer) *metrics {
+	labels := []string{"hostname", "mac", "display_name", "device_type", "device_id"}
+	uploaded := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "eero_uploaded_bytes",
+		Help: "Number of bytes uploaded over last 30 minutes",
+	}, labels)
+	downloaded := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "eero_downloaded_bytes",
+		Help: "Number of bytes downloaded over last 30 minutes",
+	}, labels)
+
+	reg.MustRegister(uploaded)
+	reg.MustRegister(downloaded)
+	return &metrics{
+		uploadedBytes:   uploaded,
+		downloadedBytes: downloaded,
+	}
+}
+
+func updateMetrics(logger *slog.Logger, metrics *metrics) {
 	go func() {
 		e := eero.NewEero()
 		e.UserToken = os.Getenv("EERO_USERTOKEN")
 		networkID := os.Getenv("EERO_NETWORK_ID")
 		eeroTimezone := os.Getenv("EERO_TIMEZONE")
-		uploaded := prometheus.NewGaugeVec(prometheus.GaugeOpts{
-			Name: "eero_uploaded_bytes",
-			Help: "Number of bytes uploaded over last 30 minutes",
-		}, []string{"hostname", "mac", "display_name", "device_type", "device_id"})
-		downloaded := prometheus.NewGaugeVec(prometheus.GaugeOpts{
-			Name: "eero_downloaded_bytes",
-			Help: "Number of bytes downloaded over last 30 minutes",
-		}, []string{"hostname", "mac", "display_name", "device_type", "device_id"})
-		prometheus.MustRegister(uploaded)
-		prometheus.MustRegister(downloaded)
 		for {
 			data, err := e.GetDataBreakdown(networkID, time.Now().Add(-1*time.Hour), time.Now(), eeroTimezone)
 			if err != nil {
@@ -41,8 +55,8 @@ func getMetrics(logger *slog.Logger) {
 			for _, d := range data.Devices {
 				urlParts := strings.Split(d.URL, "/")
 				deviceID := urlParts[len(urlParts)-1]
-				uploaded.WithLabelValues(d.Hostname, d.MAC, d.DisplayName, d.Type, deviceID).Set(float64(d.Upload))
-				downloaded.WithLabelValues(d.Hostname, d.MAC, d.DisplayName, d.Type, deviceID).Set(float64(d.Download))
+				metrics.uploadedBytes.WithLabelValues(d.Hostname, d.MAC, d.DisplayName, d.Type, deviceID).Set(float64(d.Upload))
+				metrics.downloadedBytes.WithLabelValues(d.Hostname, d.MAC, d.DisplayName, d.Type, deviceID).Set(float64(d.Download))
 			}
 			time.Sleep(1 * time.Minute)
 		}
@@ -56,8 +70,10 @@ func startServer(logger *slog.Logger) {
 		port = 2112
 	}
 
-	getMetrics(logger)
-	http.Handle("/metrics", promhttp.Handler())
+	reg := prometheus.NewPedanticRegistry()
+	metrics := registerMetrics(reg)
+	updateMetrics(logger, metrics)
+	http.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
 	logger.Info("server started", "port", port)
 	http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
 }
